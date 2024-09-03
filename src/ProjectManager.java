@@ -7,10 +7,10 @@ public class ProjectManager extends JFrame {
     private final SearchManager searchManager;
 
     public ProjectManager() {
-        setTitle("Project Manager");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setTitle("Antindolent");
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
-
+        setVisible(true);
         // Initialize Display Manager
         displayManager = new DisplayManager(this);
 
@@ -25,7 +25,7 @@ public class ProjectManager extends JFrame {
         displayManager.getSearchButton().addActionListener(_ -> searchManager.searchProjects());
         displayManager.getCreateButton().addActionListener(_ -> metadataManager.createMetadata());
 
-        pack(); // Adjust frame size to fit the content
+        pack();
     }
 
     public void updateMetadata(String projectName, String fieldName, String newValue) {
