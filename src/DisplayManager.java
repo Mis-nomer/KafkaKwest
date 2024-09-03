@@ -42,7 +42,7 @@ class DisplayManager {
         inputPanel.add(directoryField, gbc);
 
         JButton browseButton = createButton("Browse...");
-        browseButton.addActionListener(e -> {
+        browseButton.addActionListener(_ -> {
             JFileChooser fileChooser = new JFileChooser();
             fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
             int option = fileChooser.showOpenDialog(projectManager);
@@ -88,19 +88,16 @@ class DisplayManager {
         mainPanel.add(scrollPane, BorderLayout.SOUTH);
 
         // Listener for table model changes
-        tableModel.addTableModelListener(new TableModelListener() {
-            @Override
-            public void tableChanged(TableModelEvent e) {
-                if (e.getType() == TableModelEvent.UPDATE) {
-                    int row = e.getFirstRow();
-                    int column = e.getColumn();
-                    String projectName = (String) tableModel.getValueAt(row, 0); // Get the project name
-                    String columnName = tableModel.getColumnName(column); // Get the column name
-                    String newValue = (String) tableModel.getValueAt(row, column); // Get the new value
+        tableModel.addTableModelListener(e -> {
+            if (e.getType() == TableModelEvent.UPDATE) {
+                int row = e.getFirstRow();
+                int column = e.getColumn();
+                String projectName = (String) tableModel.getValueAt(row, 0); // Get the project name
+                String columnName = tableModel.getColumnName(column); // Get the column name
+                String newValue = (String) tableModel.getValueAt(row, column); // Get the new value
 
-                    // Inform the project manager about the change
-                    projectManager.updateMetadata(projectName, columnName, newValue);
-                }
+                // Inform the project manager about the change
+                projectManager.updateMetadata(projectName, columnName, newValue);
             }
         });
     }
