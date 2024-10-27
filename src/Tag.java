@@ -2,37 +2,37 @@ import java.awt.Color;
 import java.util.*;
 
 public class Tag {
-    private String name;
+    private final String name;
     private final Set<Tag> subtags;
     private Color color;
 
     public Tag(String name) {
         this.name = name;
-        this.subtags = new HashSet<>();
+        this.subtags = new LinkedHashSet<>();
         this.color = Color.GRAY; // Default color
     }
 
     public Tag(String name, Color color) {
         this.name = name;
-        this.subtags = new HashSet<>();
+        this.subtags = new LinkedHashSet<>();
         this.color = color;
     }
 
-    // Getters and setters for color
-    public Color getColor() {
-        return color;
-    }
-
-    public void setColor(Color color) {
-        this.color = color;
-    }
-
+    // Getters and setters
     public String getName() {
         return name;
     }
 
     public Set<Tag> getSubtags() {
         return subtags;
+    }
+
+    public Color getColor() {
+        return color;
+    }
+
+    public void setColor(Color color) {
+        this.color = color;
     }
 
     public void addSubtag(Tag tag) {
@@ -45,7 +45,7 @@ public class Tag {
 
     @Override
     public String toString() {
-        // Serialize the tag including color information
+        // Serialize the tag including color and subtags
         StringBuilder sb = new StringBuilder();
         sb.append(name);
         sb.append("::").append(color.getRGB());
@@ -69,23 +69,17 @@ public class Tag {
             return null;
         }
 
-        // Extract name and color
         int colorIdx = s.indexOf("::");
-        String namePart = s;
-        Color color = Color.GRAY; // Default color
+        int subtagIdx = s.indexOf('{');
 
-        if (colorIdx != -1) {
-            namePart = s.substring(0, colorIdx);
-            String colorStr = s.substring(colorIdx + 2, s.indexOf('{', colorIdx + 2) != -1 ? s.indexOf('{', colorIdx + 2) : s.length());
-            color = new Color(Integer.parseInt(colorStr));
-        }
+        String namePart = colorIdx != -1 ? s.substring(0, colorIdx) : s;
+        String colorPart = colorIdx != -1 ? s.substring(colorIdx + 2, subtagIdx != -1 ? subtagIdx : s.length()) : String.valueOf(Color.GRAY.getRGB());
+        Color color = new Color(Integer.parseInt(colorPart));
 
-        int idx = s.indexOf('{');
-        if (idx == -1) {
-            return new Tag(namePart, color);
-        } else {
-            Tag tag = new Tag(namePart, color);
-            String subtagsStr = s.substring(s.indexOf('{') + 1, s.lastIndexOf('}'));
+        Tag tag = new Tag(namePart, color);
+
+        if (subtagIdx != -1) {
+            String subtagsStr = s.substring(subtagIdx + 1, s.lastIndexOf('}'));
             String[] subtagsArr = splitSubtags(subtagsStr);
             for (String subtagStr : subtagsArr) {
                 Tag subtag = fromString(subtagStr);
@@ -93,8 +87,8 @@ public class Tag {
                     tag.addSubtag(subtag);
                 }
             }
-            return tag;
         }
+        return tag;
     }
 
     private static String[] splitSubtags(String s) {
@@ -115,6 +109,7 @@ public class Tag {
         return tags.toArray(new String[0]);
     }
 
+    // Override equals and hashCode if necessary
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -122,14 +117,11 @@ public class Tag {
 
         Tag tag = (Tag) o;
 
-        if (!name.equals(tag.name)) return false;
-        return subtags.equals(tag.subtags);
+        return name.equals(tag.name);
     }
 
     @Override
     public int hashCode() {
-        int result = name.hashCode();
-        result = 31 * result + subtags.hashCode();
-        return result;
+        return name.hashCode();
     }
 }

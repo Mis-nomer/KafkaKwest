@@ -1,6 +1,7 @@
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.*;
+import javax.swing.tree.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
@@ -13,29 +14,25 @@ import java.util.*;
 import javax.imageio.ImageIO;
 import java.util.stream.Collectors;
 
-// ... [imports remain the same]
-
 public class FileManagerView extends JFrame {
 
-    private JTextField searchField;
-    private JPanel fileGridPanel;
-    private JScrollPane fileScrollPane;
-    private JPanel sidebarPanel;
-    private JButton changeDirButton;
-    private JButton addFileButton;
-    private FileManagerController controller;
-    private JLabel fileInfoLabel;
-    private JLabel fileThumbnailLabel;
-    protected JList<Tag> tagList; // Made protected for controller access
-    private DefaultListModel<Tag> tagListModel;
-    private JButton addTagButton;
-    private JButton removeTagButton;
-    private JButton addSubtagButton;
-    private JButton deleteFileButton;
+    public JList<Object> tagList;
+    private final JTextField searchField;
+    private final JPanel fileGridPanel;
+    private final JPanel sidebarPanel;
+    private final JButton changeDirButton;
+    private final FileManagerController controller;
+    private final JLabel fileInfoLabel;
+    private final JLabel fileThumbnailLabel;
+    protected JTree tagTree;
+    private final DefaultTreeModel tagTreeModel;
+    private final JButton addTagButton;
+    private final JButton removeTagButton;
+    private final JButton addSubtagButton;
+    private final JButton deleteFileButton;
 
     private String selectedFileName;
 
-    // Define theme colors (Nord/Tokyo Night Storm)
     private final Color backgroundColor = new Color(46, 52, 64); // Dark background
     private final Color foregroundColor = new Color(216, 222, 233); // Light foreground
     private final Color accentColor = new Color(94, 129, 172); // Accent color
@@ -53,7 +50,7 @@ public class FileManagerView extends JFrame {
         fileGridPanel = new JPanel(new WrapLayout(FlowLayout.LEFT, 10, 10));
         fileGridPanel.setBackground(backgroundColor);
 
-        fileScrollPane = new JScrollPane(fileGridPanel);
+        JScrollPane fileScrollPane = new JScrollPane(fileGridPanel);
         fileScrollPane.getVerticalScrollBar().setUnitIncrement(16);
         fileScrollPane.setBorder(null);
 
@@ -63,8 +60,6 @@ public class FileManagerView extends JFrame {
         sidebarPanel.setPreferredSize(new Dimension(300, getHeight()));
         sidebarPanel.setBackground(new Color(59, 66, 82));
         sidebarPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
-        // Do not set sidebarPanel to invisible
-        // sidebarPanel.setVisible(false);
 
         fileThumbnailLabel = new JLabel();
         fileThumbnailLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -73,13 +68,14 @@ public class FileManagerView extends JFrame {
         fileInfoLabel.setForeground(foregroundColor);
         fileInfoLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        tagListModel = new DefaultListModel<>();
-        tagList = new JList<>(tagListModel);
-        tagList.setCellRenderer(new TagListCellRenderer());
-        tagList.setBackground(new Color(59, 66, 82));
-        tagList.setForeground(foregroundColor);
-        tagList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        tagList.setAlignmentX(Component.LEFT_ALIGNMENT);
+        // Initialize tag tree
+        DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode("Tags");
+        tagTreeModel = new DefaultTreeModel(rootNode);
+        tagTree = new JTree(tagTreeModel);
+        tagTree.setBackground(new Color(59, 66, 82));
+        tagTree.setForeground(foregroundColor);
+        tagTree.setCellRenderer(new TagTreeCellRenderer());
+        tagTree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
 
         addTagButton = createSidebarButton("Add Tag");
         addSubtagButton = createSidebarButton("Add Subtag");
@@ -87,7 +83,7 @@ public class FileManagerView extends JFrame {
         deleteFileButton = createSidebarButton("Delete File");
 
         changeDirButton = createButton("Change Directory");
-        addFileButton = createButton("Add File");
+        JButton addFileButton = createButton("Add File");
 
         // Set up layout
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -108,12 +104,12 @@ public class FileManagerView extends JFrame {
             setForeground(foregroundColor);
             setAlignmentX(Component.LEFT_ALIGNMENT);
         }});
-        sidebarPanel.add(new JScrollPane(tagList) {{
-            setPreferredSize(new Dimension(250, 100));
-            setAlignmentX(Component.LEFT_ALIGNMENT);
-            setBackground(new Color(59, 66, 82));
-            setBorder(null);
-        }});
+        JScrollPane treeScrollPane = new JScrollPane(tagTree);
+        treeScrollPane.setPreferredSize(new Dimension(250, 150));
+        treeScrollPane.setAlignmentX(Component.LEFT_ALIGNMENT);
+        treeScrollPane.setBackground(new Color(59, 66, 82));
+        treeScrollPane.setBorder(null);
+        sidebarPanel.add(treeScrollPane);
         sidebarPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         sidebarPanel.add(addTagButton);
         sidebarPanel.add(addSubtagButton);
@@ -163,6 +159,10 @@ public class FileManagerView extends JFrame {
         deleteFileButton.setEnabled(enabled);
     }
 
+    public void setChangeDirButtonListener(ActionListener listener) {
+        changeDirButton.addActionListener(listener);
+    }
+
     private JButton createButton(String text) {
         JButton button = new JButton(text);
         button.setBackground(accentColor);
@@ -210,7 +210,9 @@ public class FileManagerView extends JFrame {
     void clearSidebar() {
         fileThumbnailLabel.setIcon(null);
         fileInfoLabel.setText("");
-        tagListModel.clear();
+        DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode("Tags");
+        tagTreeModel.setRoot(rootNode);
+        tagTreeModel.reload();
         setSidebarButtonsEnabled(false);
     }
 
@@ -229,7 +231,7 @@ public class FileManagerView extends JFrame {
         try {
             if (Files.probeContentType(filePath) != null && Files.probeContentType(filePath).startsWith("image")) {
                 BufferedImage img = ImageIO.read(filePath.toFile());
-                Image scaledImg = img.getScaledInstance(80, 80, Image.SCALE_SMOOTH);
+                Image scaledImg = getScaledImage(img, 80, 80);
                 iconLabel.setIcon(new ImageIcon(scaledImg));
             } else {
                 // Use a generic icon with the file extension
@@ -244,10 +246,12 @@ public class FileManagerView extends JFrame {
         JLabel nameLabel = new JLabel(fileName);
         nameLabel.setForeground(foregroundColor);
         nameLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        nameLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
 
         JLabel tagsLabel = new JLabel(tagsToString(tags));
         tagsLabel.setForeground(new Color(136, 192, 208)); // Tag color
         tagsLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        tagsLabel.setFont(new Font("SansSerif", Font.PLAIN, 10));
 
         panel.add(iconLabel, BorderLayout.CENTER);
         panel.add(nameLabel, BorderLayout.NORTH);
@@ -274,7 +278,7 @@ public class FileManagerView extends JFrame {
                 } else {
                     img = (BufferedImage) labelToImage(new JLabel(getFileExtension(fileName).toUpperCase(), SwingConstants.CENTER));
                 }
-                Image scaledImg = img.getScaledInstance(200, 200, Image.SCALE_SMOOTH);
+                Image scaledImg = getScaledImage(img, 200, 200);
                 fileThumbnailLabel.setIcon(new ImageIcon(scaledImg));
             } catch (Exception e) {
                 fileThumbnailLabel.setIcon(getFileIcon(null));
@@ -293,11 +297,15 @@ public class FileManagerView extends JFrame {
                 fileInfoLabel.setText("<html><b>Name:</b> " + fileName + "</html>");
             }
 
-            // Update tag list
-            tagListModel.clear();
+            // Update tag tree
+            DefaultMutableTreeNode rootNode = new DefaultMutableTreeNode("Tags");
             for (Tag tag : tags) {
-                tagListModel.addElement(tag);
+                DefaultMutableTreeNode tagNode = createTagTreeNode(tag);
+                rootNode.add(tagNode);
             }
+            tagTreeModel.setRoot(rootNode);
+            tagTreeModel.reload();
+            expandAllNodes(tagTree, 0, tagTree.getRowCount());
 
             // Enable sidebar buttons
             setSidebarButtonsEnabled(true);
@@ -308,8 +316,38 @@ public class FileManagerView extends JFrame {
         });
     }
 
+    private DefaultMutableTreeNode createTagTreeNode(Tag tag) {
+        DefaultMutableTreeNode node = new DefaultMutableTreeNode(tag);
+        for (Tag subtag : tag.getSubtags()) {
+            node.add(createTagTreeNode(subtag));
+        }
+        return node;
+    }
+
+    // Helper method to expand all nodes in the JTree
+    private void expandAllNodes(JTree tree, int startingIndex, int rowCount){
+        for(int i=startingIndex;i<rowCount;++i){
+            tree.expandRow(i);
+        }
+
+        if(tree.getRowCount()!=rowCount){
+            expandAllNodes(tree, rowCount, tree.getRowCount());
+        }
+    }
+
     public String getSelectedFile() {
         return selectedFileName;
+    }
+
+    public Tag getSelectedTag() {
+        TreePath path = tagTree.getSelectionPath();
+        if (path != null) {
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+            if (node.getUserObject() instanceof Tag) {
+                return (Tag) node.getUserObject();
+            }
+        }
+        return null;
     }
 
     public void showError(String message) {
@@ -322,14 +360,6 @@ public class FileManagerView extends JFrame {
 
     public Color promptForColor(Color initialColor) {
         return JColorChooser.showDialog(this, "Choose Tag Color", initialColor);
-    }
-
-    public void setChangeDirButtonListener(ActionListener listener) {
-        changeDirButton.addActionListener(listener);
-    }
-
-    public FileManagerController getController() {
-        return controller;
     }
 
     public void setSelectedFileName(String fileName) {
@@ -348,7 +378,7 @@ public class FileManagerView extends JFrame {
     }
 
     private Icon getFileIcon(String extension) {
-        // You can customize icons based on the file extension
+        // Customize icons based on the file extension
         String iconText = extension != null ? extension.toUpperCase() : "FILE";
         JLabel label = new JLabel(iconText, SwingConstants.CENTER);
         label.setForeground(foregroundColor);
@@ -357,6 +387,10 @@ public class FileManagerView extends JFrame {
         label.setPreferredSize(new Dimension(80, 80));
         label.setBackground(new Color(76, 86, 106));
         label.setOpaque(true);
+
+        // Set a larger font size for better readability
+        label.setFont(new Font("SansSerif", Font.BOLD, 24));
+
         return new ImageIcon(labelToImage(label));
     }
 
@@ -369,30 +403,55 @@ public class FileManagerView extends JFrame {
         // Create a BufferedImage with the label's dimensions
         BufferedImage img = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB);
 
+        Graphics2D g2 = img.createGraphics();
+
+        // Apply rendering hints for text antialiasing
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
         // Paint the label onto the BufferedImage
-        label.paint(img.getGraphics());
+        label.paint(g2);
+        g2.dispose();
         return img;
     }
 
-    // Custom cell renderer for the tag list to display tags with colors
-    private class TagListCellRenderer extends JLabel implements ListCellRenderer<Tag> {
-        public TagListCellRenderer() {
-            setOpaque(true);
-        }
+    private Image getScaledImage(BufferedImage srcImg, int w, int h) {
+        BufferedImage resizedImg = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = resizedImg.createGraphics();
 
-        @Override
-        public Component getListCellRendererComponent(JList<? extends Tag> list, Tag tag, int index, boolean isSelected, boolean cellHasFocus) {
-            setText(tag.getName());
-            setBackground(tag.getColor());
-            setForeground(foregroundColor);
+        // Apply rendering hints for quality
+        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            if (isSelected) {
-                setBorder(BorderFactory.createLineBorder(accentColor));
-            } else {
-                setBorder(null);
-            }
-            return this;
-        }
+        g2.drawImage(srcImg, 0, 0, w, h, null);
+        g2.dispose();
+
+        return resizedImg;
     }
 
+    // Custom cell renderer for the tag tree to display tags with colors
+    private class TagTreeCellRenderer extends DefaultTreeCellRenderer {
+        @Override
+        public Component getTreeCellRendererComponent(JTree tree, Object value,
+                                                      boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
+            JLabel label = (JLabel) super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
+            label.setOpaque(true);
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
+            if (node.getUserObject() instanceof Tag tag) {
+                label.setText(tag.getName());
+                label.setBackground(tag.getColor());
+                label.setForeground(foregroundColor);
+            } else {
+                // Root node
+                label.setBackground(new Color(59, 66, 82));
+                label.setForeground(foregroundColor);
+            }
+            if (sel) {
+                label.setBorder(BorderFactory.createLineBorder(accentColor));
+            } else {
+                label.setBorder(null);
+            }
+            return label;
+        }
+    }
 }

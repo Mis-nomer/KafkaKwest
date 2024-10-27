@@ -79,13 +79,12 @@ public class FileManagerController {
             view.showError("Please select a file to add a tag.");
         }
     }
-
     public void addSubtag() {
         String selectedFile = view.getSelectedFile();
         if (selectedFile != null) {
             Set<Tag> tags = model.getFileTags().get(selectedFile);
             if (tags != null && !tags.isEmpty()) {
-                Tag parentTag = view.tagList.getSelectedValue();
+                Tag parentTag = view.getSelectedTag();
                 if (parentTag != null) {
                     String subtagName = view.promptForInput("Enter subtag name:");
                     if (subtagName != null && !subtagName.trim().isEmpty()) {
@@ -96,7 +95,7 @@ public class FileManagerController {
                         view.updateSidebar(selectedFile, tags);
                     }
                 } else {
-                    view.showError("Please select a parent tag from the list.");
+                    view.showError("Please select a parent tag from the tree.");
                 }
             } else {
                 view.showError("No tags available to add a subtag.");
@@ -105,19 +104,22 @@ public class FileManagerController {
             view.showError("Please select a file to add a subtag.");
         }
     }
-
     public void removeTag() {
         String selectedFile = view.getSelectedFile();
         if (selectedFile != null) {
             Set<Tag> tags = model.getFileTags().get(selectedFile);
             if (tags != null && !tags.isEmpty()) {
-                Tag tag = view.tagList.getSelectedValue();
-                if (tag != null) {
-                    tags.remove(tag);
-                    model.saveTags(selectedFile, tags);
-                    view.updateSidebar(selectedFile, tags);
+                Tag tagToRemove = view.getSelectedTag();
+                if (tagToRemove != null) {
+                    boolean removed = removeTagFromSet(tags, tagToRemove);
+                    if (removed) {
+                        model.saveTags(selectedFile, tags);
+                        view.updateSidebar(selectedFile, tags);
+                    } else {
+                        view.showError("Tag could not be removed.");
+                    }
                 } else {
-                    view.showError("Please select a tag to remove from the list.");
+                    view.showError("Please select a tag to remove from the tree.");
                 }
             } else {
                 view.showError("No tags available to remove.");
@@ -127,6 +129,22 @@ public class FileManagerController {
         }
     }
 
+    private boolean removeTagFromSet(Set<Tag> tags, Tag tagToRemove) {
+        Iterator<Tag> iterator = tags.iterator();
+        while (iterator.hasNext()) {
+            Tag tag = iterator.next();
+            if (tag.equals(tagToRemove)) {
+                iterator.remove();
+                return true;
+            } else {
+                boolean removed = removeTagFromSet(tag.getSubtags(), tagToRemove);
+                if (removed) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
     public void deleteFile() {
         String selectedFile = view.getSelectedFile();
         if (selectedFile != null) {
