@@ -1,4 +1,5 @@
 import javax.swing.*;
+import java.awt.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -19,13 +20,12 @@ public class FileManagerController {
 
     public void updateFileList(Map<String, Set<Tag>> fileTags) {
         String searchText = view.getSearchText();
-        List<String> filteredFiles = fileTags.entrySet().stream()
+        Map<String, Set<Tag>> filteredFiles = fileTags.entrySet().stream()
                 .filter(entry -> {
                     String fileName = entry.getKey().toLowerCase();
                     return fileName.contains(searchText) || containsTag(entry.getValue(), searchText);
                 })
-                .map(entry -> entry.getKey() + " [" + tagsToString(entry.getValue()) + "]")
-                .collect(Collectors.toList());
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         view.updateFileList(filteredFiles);
     }
 
@@ -39,12 +39,6 @@ public class FileManagerController {
             }
         }
         return false;
-    }
-
-    private String tagsToString(Set<Tag> tags) {
-        return tags.stream()
-                .map(Tag::toString)
-                .collect(Collectors.joining(", "));
     }
 
     public void filterFiles() {
@@ -74,11 +68,12 @@ public class FileManagerController {
     public void addTag() {
         String selectedFile = view.getSelectedFile();
         if (selectedFile != null) {
-            String fileName = extractFileName(selectedFile);
             String tagName = view.promptForInput("Enter tag name:");
             if (tagName != null && !tagName.trim().isEmpty()) {
-                Tag tag = new Tag(tagName.trim());
-                model.addTag(fileName, tag);
+                Color tagColor = view.promptForColor(Color.GRAY);
+                Tag tag = new Tag(tagName.trim(), tagColor != null ? tagColor : Color.GRAY);
+                model.addTag(selectedFile, tag);
+                view.updateSidebar(selectedFile, model.getFileTags().get(selectedFile));
             }
         } else {
             view.showError("Please select a file to add a tag.");
@@ -88,22 +83,20 @@ public class FileManagerController {
     public void addSubtag() {
         String selectedFile = view.getSelectedFile();
         if (selectedFile != null) {
-            String fileName = extractFileName(selectedFile);
-            Set<Tag> tags = model.getFileTags().get(fileName);
+            Set<Tag> tags = model.getFileTags().get(selectedFile);
             if (tags != null && !tags.isEmpty()) {
-                String parentTagName = view.promptForInput("Enter parent tag name:");
-                if (parentTagName != null && !parentTagName.trim().isEmpty()) {
-                    Tag parentTag = findTagByName(tags, parentTagName.trim());
-                    if (parentTag != null) {
-                        String subtagName = view.promptForInput("Enter subtag name:");
-                        if (subtagName != null && !subtagName.trim().isEmpty()) {
-                            parentTag.addSubtag(new Tag(subtagName.trim()));
-                            model.saveTags(fileName, tags);
-                            updateFileList(model.getFileTags());
-                        }
-                    } else {
-                        view.showError("Parent tag not found.");
+                Tag parentTag = view.tagList.getSelectedValue();
+                if (parentTag != null) {
+                    String subtagName = view.promptForInput("Enter subtag name:");
+                    if (subtagName != null && !subtagName.trim().isEmpty()) {
+                        Color tagColor = view.promptForColor(Color.GRAY);
+                        Tag subtag = new Tag(subtagName.trim(), tagColor != null ? tagColor : Color.GRAY);
+                        parentTag.addSubtag(subtag);
+                        model.saveTags(selectedFile, tags);
+                        view.updateSidebar(selectedFile, tags);
                     }
+                } else {
+                    view.showError("Please select a parent tag from the list.");
                 }
             } else {
                 view.showError("No tags available to add a subtag.");
@@ -116,19 +109,15 @@ public class FileManagerController {
     public void removeTag() {
         String selectedFile = view.getSelectedFile();
         if (selectedFile != null) {
-            String fileName = extractFileName(selectedFile);
-            Set<Tag> tags = model.getFileTags().get(fileName);
+            Set<Tag> tags = model.getFileTags().get(selectedFile);
             if (tags != null && !tags.isEmpty()) {
-                String tagName = view.promptForInput("Enter tag name to remove:");
-                if (tagName != null && !tagName.trim().isEmpty()) {
-                    Tag tag = findTagByName(tags, tagName.trim());
-                    if (tag != null) {
-                        tags.remove(tag);
-                        model.saveTags(fileName, tags);
-                        updateFileList(model.getFileTags());
-                    } else {
-                        view.showError("Tag not found.");
-                    }
+                Tag tag = view.tagList.getSelectedValue();
+                if (tag != null) {
+                    tags.remove(tag);
+                    model.saveTags(selectedFile, tags);
+                    view.updateSidebar(selectedFile, tags);
+                } else {
+                    view.showError("Please select a tag to remove from the list.");
                 }
             } else {
                 view.showError("No tags available to remove.");
@@ -143,30 +132,17 @@ public class FileManagerController {
         if (selectedFile != null) {
             int confirm = JOptionPane.showConfirmDialog(view, "Are you sure you want to delete this file?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
             if (confirm == JOptionPane.YES_OPTION) {
-                String fileName = extractFileName(selectedFile);
-                model.deleteFile(fileName);
+                model.deleteFile(selectedFile);
+                view.setSelectedFileName(null);
+                view.clearSidebar();
             }
         } else {
             view.showError("Please select a file to delete.");
         }
     }
 
-    private String extractFileName(String displayName) {
-        // Remove tags from display name to get the actual file name
-        int idx = displayName.indexOf(" [");
-        return (idx != -1) ? displayName.substring(0, idx) : displayName;
-    }
 
-    private Tag findTagByName(Set<Tag> tags, String name) {
-        for (Tag tag : tags) {
-            if (tag.getName().equals(name)) {
-                return tag;
-            }
-            Tag subtag = findTagByName(tag.getSubtags(), name);
-            if (subtag != null) {
-                return subtag;
-            }
-        }
-        return null;
+    public FileManagerModel getModel() {
+        return model;
     }
 }

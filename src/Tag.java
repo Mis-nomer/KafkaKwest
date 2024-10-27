@@ -1,12 +1,30 @@
+import java.awt.Color;
 import java.util.*;
 
 public class Tag {
-    private final String name;
+    private String name;
     private final Set<Tag> subtags;
+    private Color color;
 
     public Tag(String name) {
         this.name = name;
         this.subtags = new HashSet<>();
+        this.color = Color.GRAY; // Default color
+    }
+
+    public Tag(String name, Color color) {
+        this.name = name;
+        this.subtags = new HashSet<>();
+        this.color = color;
+    }
+
+    // Getters and setters for color
+    public Color getColor() {
+        return color;
+    }
+
+    public void setColor(Color color) {
+        this.color = color;
     }
 
     public String getName() {
@@ -27,11 +45,12 @@ public class Tag {
 
     @Override
     public String toString() {
-        if (subtags.isEmpty()) {
-            return name;
-        } else {
-            StringBuilder sb = new StringBuilder();
-            sb.append(name).append("{");
+        // Serialize the tag including color information
+        StringBuilder sb = new StringBuilder();
+        sb.append(name);
+        sb.append("::").append(color.getRGB());
+        if (!subtags.isEmpty()) {
+            sb.append("{");
             Iterator<Tag> it = subtags.iterator();
             while (it.hasNext()) {
                 sb.append(it.next().toString());
@@ -40,8 +59,8 @@ public class Tag {
                 }
             }
             sb.append("}");
-            return sb.toString();
         }
+        return sb.toString();
     }
 
     public static Tag fromString(String s) {
@@ -49,13 +68,24 @@ public class Tag {
         if (s == null || s.isEmpty()) {
             return null;
         }
+
+        // Extract name and color
+        int colorIdx = s.indexOf("::");
+        String namePart = s;
+        Color color = Color.GRAY; // Default color
+
+        if (colorIdx != -1) {
+            namePart = s.substring(0, colorIdx);
+            String colorStr = s.substring(colorIdx + 2, s.indexOf('{', colorIdx + 2) != -1 ? s.indexOf('{', colorIdx + 2) : s.length());
+            color = new Color(Integer.parseInt(colorStr));
+        }
+
         int idx = s.indexOf('{');
         if (idx == -1) {
-            return new Tag(s);
+            return new Tag(namePart, color);
         } else {
-            String name = s.substring(0, idx);
-            Tag tag = new Tag(name);
-            String subtagsStr = s.substring(idx + 1, s.lastIndexOf('}'));
+            Tag tag = new Tag(namePart, color);
+            String subtagsStr = s.substring(s.indexOf('{') + 1, s.lastIndexOf('}'));
             String[] subtagsArr = splitSubtags(subtagsStr);
             for (String subtagStr : subtagsArr) {
                 Tag subtag = fromString(subtagStr);
